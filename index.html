@@ -2405,6 +2405,11 @@
 
       renderMiniSearchList();
       renderPlaylistList();
+      if (window.innerWidth <= 860) {
+        setTimeout(() => {
+          dom.lyricsContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100); // 稍微延迟一下，等 UI 渲染完毕再滚动
+      }
     }
 
     function getActiveList(){
@@ -2649,9 +2654,13 @@
         wrap.appendChild(item);
       });
 
-      const playingEl=wrap.querySelector('.track-item.playing');
-      if(playingEl){
-        playingEl.scrollIntoView({block:'center',behavior:'smooth'});
+      const playingEl = wrap.querySelector('.track-item.playing');
+      if (playingEl) {
+        // 改为纯计算内部滚动高度，只滚动列表容器，不再引发全屏跳动
+        wrap.scrollTo({
+          top: playingEl.offsetTop - wrap.clientHeight / 2 + playingEl.clientHeight / 2,
+          behavior: 'smooth'
+        });
       }
     }
 
