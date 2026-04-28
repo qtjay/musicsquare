@@ -1,35 +1,49 @@
 export const config = {
-  // 匹配所有路径，防止别人通过直接访问 /index.html 或其他静态文件绕过密码
+  // 匹配所有路径
   matcher: '/(.*)',
 };
 
-export default function middleware(req) {
+export default async function middleware(req) {
   const basicAuth = req.headers.get('authorization');
 
   if (basicAuth) {
     try {
       const authValue = basicAuth.split(' ')[1];
-      // 解码 Base64 格式的账号密码
       const decodedValue = atob(authValue);
-      
-      // 【修改点1】：使用 indexOf 分割，防止密码本身包含冒号导致解析错位
       const index = decodedValue.indexOf(':');
       const user = decodedValue.substring(0, index);
-      const pwd = decodedValue.substring(index + 1);
+      const inputPwd = decodedValue.substring(index + 1);
 
-      // 👇 在这里设置你的账号和密码 👇
-      if (user === 'yygx' && pwd === 'yygx880919') {
-        // 【修改点2】：验证通过时，直接 return（返回空）
-        // 这是纯 Vercel 项目最标准的放行方式，告诉服务器直接加载原本的网页
-        return; 
+      // 从 Vercel 环境变量获取 Upstash 的接口地址和 Token
+      const upstashUrl = process.env.UPSTASH_REDIS_REST_URL;
+      const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+      // 👇 【核心修改点】：适配你的 Key 格式：u:用户名:pwd
+      const redisKey = `u:${user}:pwd`;
+      const apiUrl = `${upstashUrl}/get/${redisKey}`;
+      
+      const response = await fetch(apiUrl, {
+        headers: {
+          'Authorization': `Bearer ${upstashToken}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Upstash 会把查到的纯文本放在 result 字段中
+        const realPwd = data.result;
+
+        // 对比：确保账号存在(不为null) 且 用户输入的密码与数据库明文密码完全一致
+        if (realPwd !== null && inputPwd === String(realPwd)) {
+          return; // 验证通过，放行加载网页
+        }
       }
     } catch (error) {
-      // 如果浏览器传来的编码有问题导致 atob 崩溃，捕获错误，防止整个函数死机
-      console.error("Auth error");
+      console.error("Auth or Upstash Error");
     }
   }
 
-  // 如果没有输入密码、密码错误、或解析失败，弹出登录框
+  // 密码错误、账号不存在或未输入时弹窗
   return new Response('Auth required', {
     status: 401,
     headers: {
