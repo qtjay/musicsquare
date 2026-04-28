@@ -1258,6 +1258,15 @@
       .progress-row {
         width: 100%;
       }
+      /* === 单独放大手机端歌词区域 === */
+      .player-panel {
+        height: auto; /* 解除 550px 的固定高度限制，让面板能被内部元素撑开 */
+      }
+      .lyrics-container {
+        flex: none; /* 取消自适应拉伸 */
+        height: 450px; /* 将歌词区域高度设定为 450px（大约是原先剩余空间的两倍） */
+        margin-top: 15px; /* 增加一点顶部间距，让排版更透气 */
+      }
     }
   </style>
 </head>
