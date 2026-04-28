@@ -1189,23 +1189,74 @@
       .player-panel{grid-area:player;}
       .playlist-panel{grid-area:playlist;}
     }
-    @media (max-width:860px){
-      header{
-        flex-direction:column;
-        align-items:flex-start;
-        gap:6px;
+@media (max-width: 860px) {
+      /* 1. 释放页面高度限制，允许移动端整体上下滚动 */
+      html, body {
+        overflow-y: auto;
+        overflow-x: hidden;
       }
-      .header-controls{
-        width:100%;
-        justify-content:space-between;
+      
+      /* 2. 主容器高度设为自适应，不再锁死屏幕高度 */
+      .app {
+        height: auto;
+        min-height: calc(100vh - 32px);
       }
-      .layout{
-        grid-template-columns:1fr;
-        grid-template-rows:auto auto auto;
-        grid-template-areas:
-          "player"
-          "search"
-          "playlist";
+
+      /* 3. 头部信息在窄屏下换行显示 */
+      header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+      }
+      .header-controls {
+        width: 100%;
+        justify-content: space-between;
+      }
+
+      /* 4. 将布局改为 Flex 垂直排布，并给每个面板一个舒适的固定高度，防止挤压 */
+      .layout {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+      }
+      .panel {
+        height: 550px; /* 每个面板独立滚动，保证足够的操作空间 */
+        flex: none;
+      }
+
+      /* 5. 播放器内部自适应：封面和控制按钮改为上下居中排列 */
+      .player-top {
+        flex-direction: column;
+        align-items: center;
+        min-height: auto;
+      }
+      .cover-wrapper {
+        width: 160px;
+        height: 160px;
+        margin-bottom: 10px;
+      }
+      .track-title-row {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 10px;
+      }
+      .track-text {
+        max-width: 100%;
+      }
+      .player-actions {
+        align-items: center;
+      }
+      .control-row {
+        flex-direction: column;
+        gap: 15px;
+      }
+      .control-secondary {
+        width: 100%;
+        justify-content: center;
+      }
+      .progress-row {
+        width: 100%;
       }
     }
   </style>
