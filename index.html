@@ -1258,6 +1258,20 @@
       .progress-row {
         width: 100%;
       }
+  /* === 拉长手机端进度条 === */
+      .player-main {
+        width: 100%; /* 强制主控区域占满整个面板宽度 */
+      }
+      .player-controls {
+        width: 100%; 
+      }
+      .progress-row {
+        width: 100%;
+        padding: 0 10px; /* 给进度条左右增加一点点安全距离，防止贴边 */
+      }
+      .track-title-row {
+        width: 100%; /* 让标题和收藏按钮区域也保持居中拉宽，视觉更协调 */
+      }
     }
   </style>
 </head>
