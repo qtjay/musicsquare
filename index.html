@@ -1260,12 +1260,17 @@
       }
       /* === 单独放大手机端歌词区域 === */
       .player-panel {
-        height: auto; /* 解除 550px 的固定高度限制，让面板能被内部元素撑开 */
+        /* 强制覆盖之前设定的 550px，让面板紧紧包裹住内容，消除底部多余黑框 */
+        height: auto !important; 
+        padding-bottom: 15px; 
       }
       .lyrics-container {
-        flex: none; /* 取消自适应拉伸 */
-        height: 300px; /* 将歌词区域高度设定为 450px（大约是原先剩余空间的两倍） */
-        margin-top: 15px; /* 增加一点顶部间距，让排版更透气 */
+        flex: none;
+        /* 改用最大高度：歌词多时最多 300px 并支持滚动；歌词少时自动缩短，消除内部留白 */
+        max-height: 300px;
+        height: auto;
+        min-height: 120px; /* 保证没歌词时也有个基础大小，视觉不塌陷 */
+        margin-top: 15px;
       }
       /* === 拉长手机端进度条 === */
       .player-main {
