@@ -1264,8 +1264,22 @@
       }
       .lyrics-container {
         flex: none; /* 取消自适应拉伸 */
-        height: 450px; /* 将歌词区域高度设定为 450px（大约是原先剩余空间的两倍） */
+        height: 300px; /* 将歌词区域高度设定为 450px（大约是原先剩余空间的两倍） */
         margin-top: 15px; /* 增加一点顶部间距，让排版更透气 */
+      }
+      /* === 拉长手机端进度条 === */
+      .player-main {
+        width: 100%; /* 强制主控区域占满整个面板宽度 */
+      }
+      .player-controls {
+        width: 100%; 
+      }
+      .progress-row {
+        width: 100%;
+        padding: 0 10px; /* 给进度条左右增加一点点安全距离，防止贴边 */
+      }
+      .track-title-row {
+        width: 100%; /* 让标题和收藏按钮区域也保持居中拉宽，视觉更协调 */
       }
     }
   </style>
