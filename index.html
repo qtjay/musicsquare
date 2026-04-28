@@ -1258,34 +1258,6 @@
       .progress-row {
         width: 100%;
       }
-      /* === 单独放大手机端歌词区域 === */
-      .player-panel {
-        /* 强制覆盖之前设定的 550px，让面板紧紧包裹住内容，消除底部多余黑框 */
-        height: auto !important; 
-        padding-bottom: 15px; 
-      }
-      .lyrics-container {
-        flex: none;
-        /* 改用最大高度：歌词多时最多 300px 并支持滚动；歌词少时自动缩短，消除内部留白 */
-        max-height: 300px;
-        height: auto;
-        min-height: 120px; /* 保证没歌词时也有个基础大小，视觉不塌陷 */
-        margin-top: 15px;
-      }
-      /* === 拉长手机端进度条 === */
-      .player-main {
-        width: 100%; /* 强制主控区域占满整个面板宽度 */
-      }
-      .player-controls {
-        width: 100%; 
-      }
-      .progress-row {
-        width: 100%;
-        padding: 0 10px; /* 给进度条左右增加一点点安全距离，防止贴边 */
-      }
-      .track-title-row {
-        width: 100%; /* 让标题和收藏按钮区域也保持居中拉宽，视觉更协调 */
-      }
     }
   </style>
 </head>
@@ -2410,11 +2382,6 @@
 
       renderMiniSearchList();
       renderPlaylistList();
-      if (window.innerWidth <= 860) {
-        setTimeout(() => {
-          dom.lyricsContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 100); // 稍微延迟一下，等 UI 渲染完毕再滚动
-      }
     }
 
     function getActiveList(){
@@ -2659,13 +2626,9 @@
         wrap.appendChild(item);
       });
 
-      const playingEl = wrap.querySelector('.track-item.playing');
-      if (playingEl) {
-        // 改为纯计算内部滚动高度，只滚动列表容器，不再引发全屏跳动
-        wrap.scrollTo({
-          top: playingEl.offsetTop - wrap.clientHeight / 2 + playingEl.clientHeight / 2,
-          behavior: 'smooth'
-        });
+      const playingEl=wrap.querySelector('.track-item.playing');
+      if(playingEl){
+        playingEl.scrollIntoView({block:'center',behavior:'smooth'});
       }
     }
 
