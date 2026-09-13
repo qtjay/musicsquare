@@ -560,13 +560,16 @@ kbd{
     /* 背景压住下方滚上来的歌词，避免重叠 */
     background:linear-gradient(var(--bg) 84%, color-mix(in oklab, var(--bg) 0%, transparent));
   }
+  /* 收起按钮悬浮在半圆封面上：用 absolute 脱离文档流，
+     否则它会占掉顶部一行，把封面挤下来、无法贴到最顶端 */
   .np-back{
-    display:inline-flex;align-self:flex-start;
+    display:inline-flex;
+    position:absolute;top:8px;left:8px;z-index:40;
     height:36px;padding:0 14px 0 10px;border-radius:999px;
-    background:color-mix(in oklab, var(--surface) 90%, transparent);
+    background:color-mix(in oklab, var(--surface) 82%, transparent);
     backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
     border:1px solid var(--line);color:var(--text);font-size:13px;font-weight:600;
-    box-shadow:var(--shadow);margin-bottom:4px;
+    box-shadow:var(--shadow);
   }
   .np-back .icon{width:18px;height:18px}
   /* 歌词区独立滚动，不与顶部区重叠 */
@@ -575,7 +578,7 @@ kbd{
 
   /* 播放页沉浸：隐藏搜索栏 */
   body.np-mode .topbar{display:none}
-  body.np-mode main{padding:10px 16px calc(var(--player-h) + 16px)}
+  body.np-mode main{padding:0 16px calc(var(--player-h) + 16px)}
 
   /* 迷你播放条：封面+信息 / 上一首·播放·下一首 / 收藏 */
   .player-inner{grid-template-columns:minmax(0,1fr) auto auto;gap:10px;padding:0 12px}
@@ -983,6 +986,7 @@ kbd{
   const HISTORY_STORAGE_KEY = 'musicsquare-history-v1';
   const THEME_STORAGE_KEY = 'musicsquare-theme';
   const LANG_STORAGE_KEY = 'pikachu-music-lang';
+  const REC_STORAGE_KEY = 'musicsquare-recommend-v1';
   const HISTORY_MAX = 60;
 
   const dom = {};
@@ -1382,32 +1386,120 @@ kbd{
 
   /* ===================== 音乐推荐 ===================== */
   const RECOMMEND_POOL = [
+    // 风格 / 场景
     '抖音热歌', '古风', '说唱', '轻音乐', '民谣', '粤语经典',
+    '华语流行', '摇滚', '电子', 'R&B', '爵士', '国风',
+    '校园民谣', '城市民谣', '治愈系', '睡前音乐', '车载音乐', '健身动感',
+    '咖啡厅', '雨天', '电影原声', '钢琴曲', '吉他弹唱', 'ACG',
+    '国风电音', '城市夜景', '经典老歌', '伤感情歌', '励志', '对唱',
+    // 歌手
     '周杰伦', '林俊杰', '陈奕迅', '邓紫棋', '五月天', '薛之谦',
-    '毛不易', '告五人', '电影原声', '钢琴曲'
+    '毛不易', '告五人', '李荣浩', '张惠妹', '王力宏', '孙燕姿',
+    '张国荣', 'Beyond', '朴树', '赵雷', '陈粒', '房东的猫'
   ];
-  const REC_PER_KEYWORD = 6;   // 每个关键词每源取的条数
-  const REC_KEYWORDS = 3;      // 每批使用的关键词数
+  const REC_FETCH = 18;        // 每个「关键词 × 音源」先多取一些，供轮转挑选
+  const REC_PER_SOURCE = 5;    // 轮转后每个「关键词 × 音源」实际采用条数
+  const REC_KEYWORDS = 4;      // 每批使用的关键词数
   const REC_MAX = 30;          // 推荐列表上限
+  const REC_RECENT_KW = 12;    // 记住最近用过的关键词，避免短期反复
+  const REC_RECENT_TRACKS = 150; // 记住最近推荐过的曲目，跨批次不重复推
+
+  /* 推荐状态（种子 / 最近关键词 / 最近曲目）需要跨会话持久化，
+     否则每次打开页面种子都从 0 开始，拿到的永远是同一批歌 */
+  const recState = {seed:0, ts:0, keywords:[], tracks:[]};
+
+  function loadRecState(){
+    try{
+      const raw = localStorage.getItem(REC_STORAGE_KEY);
+      if(!raw) return;
+      const j = JSON.parse(raw);
+      if(!j || typeof j !== 'object') return;
+      if(typeof j.seed === 'number' && isFinite(j.seed)) recState.seed = j.seed;
+      if(typeof j.ts === 'number' && isFinite(j.ts)) recState.ts = j.ts;
+      recState.keywords = Array.isArray(j.keywords) ? j.keywords.slice(0, REC_RECENT_KW) : [];
+      recState.tracks = Array.isArray(j.tracks) ? j.tracks.slice(0, REC_RECENT_TRACKS) : [];
+    }catch(e){ /* 读不到就按首次使用处理 */ }
+  }
+  function saveRecState(){
+    try{
+      localStorage.setItem(REC_STORAGE_KEY, JSON.stringify({
+        version:1, seed:recState.seed, ts:recState.ts,
+        keywords:recState.keywords.slice(0, REC_RECENT_KW),
+        tracks:recState.tracks.slice(0, REC_RECENT_TRACKS)
+      }));
+    }catch(e){ console.warn('save recommend state failed', e); }
+  }
+
+  /* 首次使用随机取种子；之后按「距上次经过的天数」递增（至少 +1），
+     这样隔天打开会自动换一批，而不是永远停在同一批关键词上 */
+  function initRecommendSeed(){
+    const now = Date.now();
+    if(recState.ts){
+      const days = Math.max(1, Math.floor((now - recState.ts) / 86400000));
+      recState.seed += days;
+    }else{
+      recState.seed = Math.floor(Math.random() * 100000);
+    }
+    state.recommendSeed = recState.seed;
+  }
+
+  /* 归一化判重键。
+     各音源的歌手写法不一致：QQ 给「周杰伦」，网易给「周杰伦/温岚/吴宗宪」，
+     必须只取首位歌手，跨源的同一首歌才能判重成功。 */
+  function normTitle(s){
+    return String(s || '').toLowerCase()
+      .replace(/[（(][^（）()]*[)）]\s*$/g, '')   // 去掉尾部 (Live) / (Remix)
+      .replace(/[\s　]+/g, '')
+      .replace(/[，,。.！!？?、~～\-_—"'’“”]/g, '');
+  }
+  function normArtist(s){
+    return String(s || '').split(/[\/／、,，、;；|&＆]| feat\.? | vs\.? /i)[0]
+      .trim().toLowerCase().replace(/[\s　]+/g, '');
+  }
+  function trackDedupeKey(tr){
+    return normTitle(tr.title) + '|' + normArtist(tr.artist);
+  }
+
+  /* 用种子做确定性洗牌，保证同一批可复现、换一批又完全不同 */
+  function shuffleWithSeed(arr, seed){
+    const a = arr.slice();
+    let s = (Math.abs(seed) % 2147483647) + 1;
+    for(let i = a.length - 1; i > 0; i--){
+      s = (s * 1103515245 + 12345) % 2147483648;
+      const j = s % (i + 1);
+      const tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+    }
+    return a;
+  }
 
   function pickRecommendKeywords(){
-    const out = [];
-    const pool = RECOMMEND_POOL.slice();
-    for(let i = 0; i < REC_KEYWORDS && pool.length; i++){
-      const idx = (state.recommendSeed * 7 + i * 5) % pool.length;
-      out.push(pool.splice(idx, 1)[0]);
+    const recent = recState.keywords || [];
+    // 优先从「最近没用过」的关键词里挑
+    const fresh = RECOMMEND_POOL.filter(function(k){ return recent.indexOf(k) < 0; });
+    let picked = shuffleWithSeed(fresh, state.recommendSeed).slice(0, REC_KEYWORDS);
+    if(picked.length < REC_KEYWORDS){
+      const rest = shuffleWithSeed(RECOMMEND_POOL, state.recommendSeed + 17)
+        .filter(function(k){ return picked.indexOf(k) < 0; });
+      picked = picked.concat(rest.slice(0, REC_KEYWORDS - picked.length));
     }
-    return out;
+    return picked;
   }
 
   function dedupeTracks(list, max){
     const seen = new Set();
+    const titleSeen = new Set();
     const out = [];
     list.forEach(function(tr){
       if(!tr || !tr.uid) return;
-      const key = (tr.title || '').trim().toLowerCase() + '|' + (tr.artist || '').trim().toLowerCase();
+      const key = trackDedupeKey(tr);
       if(seen.has(key)) return;
+      const t = normTitle(tr.title);
+      /* 推荐流里同一首歌重复出现体验最差，而跨音源的歌手写法不一致
+         （QQ「周杰伦」/ 网易「周杰伦/温岚」/ 酷我「周杰伦&温岚」），
+         精确判重会漏判。所以同一批里再按标题兜底判一次重。 */
+      if(titleSeen.has(t)) return;
       seen.add(key);
+      titleSeen.add(t);
       out.push(tr);
     });
     return out.slice(0, max || REC_MAX);
@@ -1415,7 +1507,7 @@ kbd{
 
   async function loadRecommendations(advance){
     if(state.recommendLoading) return;
-    if(advance) state.recommendSeed = (state.recommendSeed + 1) % 97;
+    if(advance) state.recommendSeed = (state.recommendSeed + 1) % 100000;
     state.recommendLoading = true;
     renderRecommend();
 
@@ -1425,17 +1517,64 @@ kbd{
     try{
       const tasks = [];
       keywords.forEach(function(kw){
-        tasks.push(searchNetease(kw, 1, REC_PER_KEYWORD));
-        tasks.push(searchQQ(kw, REC_PER_KEYWORD));
-        tasks.push(searchKuwo(kw, REC_PER_KEYWORD));
+        tasks.push(searchNetease(kw, 1, REC_FETCH));
+        tasks.push(searchQQ(kw, REC_FETCH));
+        tasks.push(searchKuwo(kw, REC_FETCH));
       });
       await Promise.all(tasks);
     }catch(e){ console.error('recommend', e); }
     finally{ searchSink = null; }
 
-    state.recommendList = dedupeTracks(sink.list, REC_MAX);
+    /* 每个「关键词 × 音源」分组按种子轮转取一段窗口。
+       接口的排序是固定的（按热度），如果永远只取前 N 条，
+       同一个关键词每次拿到的都是同样的几首歌。 */
+    const byKw = new Map();
+    sink.list.forEach(function(tr){
+      const kw = tr.keyword || '';
+      if(!byKw.has(kw)) byKw.set(kw, {});
+      const g = byKw.get(kw);
+      const s = tr.source || '';
+      if(!g[s]) g[s] = [];
+      g[s].push(tr);
+    });
+
+    const picked = [];
+    keywords.forEach(function(kw){
+      const g = byKw.get(kw) || {};
+      const windows = ['netease', 'qq', 'kuwo'].map(function(s){
+        const arr = g[s] || [];
+        if(arr.length <= REC_PER_SOURCE) return arr;
+        const start = state.recommendSeed % (arr.length - REC_PER_SOURCE + 1);
+        return arr.slice(start, start + REC_PER_SOURCE);
+      });
+      /* 关键：按音源轮流取，而不是先把一个源全取完。
+         去重保留的是「先出现的一条」，若按源整段拼接，
+         排在前面的音源会把同名的其他源条目全部挤掉，最后列表只剩单一音源。 */
+      for(let i = 0; i < REC_PER_SOURCE; i++){
+        windows.forEach(function(arr){ if(arr[i]) picked.push(arr[i]); });
+      }
+    });
+
+    // 排除最近已经推荐过的曲目
+    const recentSet = new Set(recState.tracks || []);
+    let fresh = dedupeTracks(picked, REC_MAX * 3)
+      .filter(function(tr){ return !recentSet.has(trackDedupeKey(tr)); });
+    // 历史记录太多、新歌不够时放宽限制，保证列表尽量填满
+    if(fresh.length < Math.ceil(REC_MAX * 0.8)) fresh = dedupeTracks(picked, REC_MAX * 3);
+
+    state.recommendList = fresh.slice(0, REC_MAX);
     state.recommendKeywords = keywords;
     state.recommendLoading = false;
+
+    // 记录本批关键词与曲目，供下一批避让
+    recState.seed = state.recommendSeed;
+    recState.ts = Date.now();
+    recState.keywords = keywords.concat(recState.keywords)
+      .filter(function(k, i, a){ return a.indexOf(k) === i; }).slice(0, REC_RECENT_KW);
+    recState.tracks = state.recommendList.map(trackDedupeKey).concat(recState.tracks)
+      .filter(function(k, i, a){ return a.indexOf(k) === i; }).slice(0, REC_RECENT_TRACKS);
+    saveRecState();
+
     renderRecommend();
   }
 
@@ -1782,8 +1921,22 @@ kbd{
     const act = wrap.querySelector('.lyrics-line[data-index="' + idx + '"]');
     if(act){
       act.classList.add('active');
-      if(state.view === 'nowplaying') wrap.scrollTo({top:act.offsetTop - wrap.clientHeight * 0.45, behavior:'smooth'});
+      if(state.view === 'nowplaying') scrollLyricIntoView(wrap, act);
     }
+  }
+
+  /* 把当前歌词行滚到容器的 45% 高度处。
+     注意：不能用 act.offsetTop —— offsetTop 是相对「最近的已定位祖先」计算的，
+     而 lyrics-body 的祖先链（np-right / np-stage / view-np / main）没有任何定位元素，
+     会一路回溯到 body，于是把顶栏以及小屏吸顶头部的高度全部算进滚动量，
+     造成过冲、歌词看起来比实际进度「超前」。这里改用两个 rect 的差值，
+     只依赖容器与行的相对位置，与祖先定位方式无关。 */
+  function scrollLyricIntoView(wrap, act){
+    const ANCHOR = 0.45;
+    const wrapRect = wrap.getBoundingClientRect();
+    const actRect = act.getBoundingClientRect();
+    const target = wrap.scrollTop + (actRect.top - wrapRect.top) - wrap.clientHeight * ANCHOR;
+    wrap.scrollTo({top:Math.max(0, target), behavior:'smooth'});
   }
 
   /* ===================== 收藏 / 歌单 / 记录 ===================== */
@@ -2790,6 +2943,9 @@ kbd{
 
     loadLibrary();
     loadHistory();
+    // 推荐种子必须在取推荐之前初始化，否则会一直用默认的 0
+    loadRecState();
+    initRecommendSeed();
 
     dom.audio.volume = 0.7;
     dom.volFill.style.width = '70%';
