@@ -177,6 +177,26 @@ svg{display:block}
   box-shadow:var(--shadow-lift);padding:14px;
 }
 .search-panel.show{display:block;animation:pop .25s var(--ease)}
+/* 搜索下拉面板的宽度受 .search-wrap（≤560px）限制，而 .track-row 六列布局里
+   固定列 36+48+160+118+100=462 加上 5×14 的 gap 已经超过面板可用宽度，
+   标题列 minmax(0,1fr) 会被压成 0 宽；再叠加 .t-name 的 overflow:hidden，
+   歌名就完全看不见了。面板内改用紧凑五列，并把看不到内容的专辑列与音质角标收起。
+   限定在 >900px：小屏有自己的行布局，不能被这里的更高特异性覆盖。 */
+@media (min-width:901px){
+  /* 面板宽度原本完全跟随 .search-wrap（flex:1，被头部其他元素挤到只剩 251~560px），
+     而 .track-row 六列布局的固定列 36+48+160+118+100=462 加上 5×14 gap 已经超过它，
+     标题列 minmax(0,1fr) 会被压成 0 宽，再叠加 .t-name 的 overflow:hidden，
+     歌名就彻底看不见。这里给面板一个独立于搜索框的最小宽度
+     （实测搜索框左边界恒为 258px，右侧留足余量，不会被裁切），
+     并把行改成紧凑五列、收起看不到内容的专辑列与音质角标。 */
+  .search-panel{min-width:min(640px, calc(100vw - 276px))}
+  .search-panel .track-row{
+    grid-template-columns:28px 44px minmax(0,1fr) 72px 100px;
+    gap:10px;padding:8px 10px;
+  }
+  .search-panel .t-album{display:none}
+  .search-panel .pill.quality{display:none}
+}
 .sp-section+.sp-section{margin-top:16px}
 .sp-head{display:flex;align-items:center;gap:8px;margin-bottom:11px;font-size:13px;font-weight:700;flex-wrap:wrap}
 .sp-head .hint{font-weight:400;font-size:12px;color:var(--text-3)}
