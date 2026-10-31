@@ -361,6 +361,7 @@ main{flex:1;overflow-y:auto;padding:6px 26px 40px;scroll-behavior:smooth}
 .pill .dot.kuwo{background:#ff9a2e}
 .pill .dot.joox{background:#2f7ef7}
 .pill.quality{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-strong)}
+.pill.cross{background:color-mix(in oklab, var(--accent) 14%, transparent);border-style:dashed}
 .t-actions{display:flex;align-items:center;justify-content:flex-end;gap:2px}
 .t-act{width:31px;height:31px;border-radius:50%;display:grid;place-items:center;color:var(--text-3);transition:all .2s}
 .t-act .icon{width:16px;height:16px}
@@ -936,6 +937,7 @@ kbd{
     zh:{
       sourceNetease:"网易云", sourceQQ:"QQ音乐", sourceKuwo:"酷我", sourceJoox:"JOOX",
       preview:"试听片段", fullVersion:"完整版",
+      crossFilled:"版权受限，已改用{source}资源",
       emptySearchResults:"还没有搜索结果，用顶部搜索框试试",
       selectAll:"全选", selectedCount:"已选 {n} 首",
       batchFav:"批量收藏", batchAdd:"加入歌单", clearSelection:"取消选择",
@@ -993,6 +995,7 @@ kbd{
     en:{
       sourceNetease:"Netease", sourceQQ:"QQ Music", sourceKuwo:"Kuwo", sourceJoox:"JOOX",
       preview:"Preview", fullVersion:"Full",
+      crossFilled:"Restricted here, playing from {source}",
       emptySearchResults:"No results yet — try the search box above",
       selectAll:"Select all", selectedCount:"{n} selected",
       batchFav:"Favorite", batchAdd:"Add to playlist", clearSelection:"Clear",
@@ -1739,14 +1742,40 @@ kbd{
     track.detailsLoaded = true;
   }
 
+  /* 判断 vkeys 这次返回的是不是 60 秒试听片段。
+     不能只看 pay 字段 —— 实测「孤勇者（童声版）」的 pay 同样写着"付费"，
+     但 vkeys 给它的是 23.37MB 的完整 FLAC；而 pay 同样是"付费"的
+     「晴天」「发如雪」只拿到固定的 0.92MB（960887 字节 ≈ 128kbps×60s）。
+     可靠的三个信号按优先级取：
+       1. quality 字段明确写着"音乐试听"
+       2. 直链文件名以 RS0x 开头，这是 QQ 固定试听流的命名（RS020027oMO61wWi55.mp3）
+       3. size 明显小于「真实时长 × 码率」应有的体积
+     注意 vkeys 的 time 字段是发行日期而非时长，真实时长在 interval（"4分29秒"）。 */
+  const QQ_PREVIEW_BYTES = 960887;
+  function isQQPreviewPayload(d, url){
+    if(/试听|trial|preview/i.test(String(d.quality || ''))) return true;
+    if(/RS0\d/i.test(String(url || ''))) return true;
+    const mb = String(d.size || '').match(/([\d.]+)\s*mb/i);
+    const kb = String(d.kbps || '').match(/(\d+)/);
+    const itv = String(d.interval || '').match(/(?:(\d+)\s*分)?\s*([\d.]+)\s*秒/);
+    if(mb && kb && itv){
+      const seconds = (parseInt(itv[1] || 0, 10) * 60) + (parseFloat(itv[2]) || 0);
+      const expectMB = seconds > 0 ? (parseInt(kb[1], 10) * seconds / 8 / 1024) : 0;
+      if(expectMB > 0 && parseFloat(mb[1]) < expectMB * 0.5) return true;
+    }
+    if(mb && parseFloat(mb[1]) * 1048576 <= QQ_PREVIEW_BYTES * 1.05) return true;
+    return false;
+  }
+
   async function fetchQQDetails(track){
     const mid = (track.qqId || track.songMid || track.songid || '').toString().trim();
     if(!mid) return;
-    // vkeys 的 QQ 接口只返回固定 60 秒试听片段（实测每首恒定 960887 字节 ≈ 128kbps×60s），
-    // tang 接口才返回完整版。因此以 tang 为主源，tang 拿不到直链时才退回 vkeys 并标记为试听。
+    // vkeys 的 QQ 接口对部分曲目只返回固定 60 秒试听片段（实测每首恒定 960887 字节 ≈ 128kbps×60s），
+    // tang 接口才返回完整版。因此以 tang 为主源，tang 拿不到直链时才退回 vkeys；
+    // 但退回 vkeys 不等于一定是试听，是否加标记由 fetchQQVkeys 按实际返回体决定。
     await fetchQQTang(track, mid);
     if(track.audioUrl){ track.isPreview = false; return; }
-    if(await fetchQQVkeys(track, mid)) track.isPreview = true;
+    await fetchQQVkeys(track, mid);
   }
 
   function extractQQCore(filename){
@@ -1793,6 +1822,9 @@ kbd{
       track.pay = d.pay || track.pay;
       track.qqQualityText = d.quality || track.qqQualityText || null;
       track.audioUrl = toHttps(d.url);
+      // 只有确认是试听片段才打标记：vkeys 有时会给完整版（甚至是无损 FLAC），
+      // 一刀切标成"试听片段"会把这些歌误伤。
+      track.isPreview = isQQPreviewPayload(d, d.url);
       const kb = String(d.kbps || '').match(/(\d+)/);
       if(kb){ track.quality = kb[1] + 'k'; track.qualityLabel = kb[1] + 'K'; }
       track.detailsLoaded = true;
@@ -1955,6 +1987,121 @@ kbd{
     }
   }
 
+  /* ===================== QQ 付费曲目的跨音源补位 =====================
+     tang 详情对 pay="付费" 的曲目会把 song_play_url 及全部质量档留空，
+     vkeys 兜底又只给固定 60 秒试听（周杰伦整张目录几乎全是这种情况）。
+     这时改用「标题 + 歌手」去网易 / 酷我 / Joox 重搜同一首歌，用它们的完整直链补位。
+
+     两个约束：
+     - 只在真正要点播时才跑（挂在 ensureTrackDetails 末尾），列表渲染不触发，不影响首屏
+     - 浏览器里无法用 fetch 探测 CDN 文件大小（会被 CORS 挡），所以只做名称匹配、
+       不做体积校验，命中与否缓存到 track.crossResolved，同一首只试一次 */
+  const CROSS_SOURCES = [
+    {key:'netease', detail:function(tr){ return fetchNeteaseDetails(tr); }},
+    {key:'kuwo',    detail:function(tr){ return fetchKuwoDetails(tr); }},
+    {key:'joox',    detail:function(tr){ return fetchJooxDetails(tr); }}
+  ];
+
+  /* 名称相似度打分。跨源同名歌写法差异很大（网易给「周杰伦/温岚/吴宗宪」），
+     所以标题相等或互为子串才算命中，歌手能对应再加分；标题完全对不上直接排除。 */
+  function crossScore(cand, target){
+    const tt = normTitle(target.title), ta = normArtist(target.artist);
+    const ct = normTitle(cand.title), ca = normArtist(cand.artist);
+    if(!tt || !ct) return 0;
+    let score = 0;
+    if(ct === tt) score += 2;
+    else if(ct.indexOf(tt) >= 0 || tt.indexOf(ct) >= 0) score += 1;
+    else return 0;
+    if(ta && ca && (ca === ta || ca.indexOf(ta) >= 0 || ta.indexOf(ca) >= 0)) score += 2;
+    return score;
+  }
+
+  async function crossSearchCandidates(track, source){
+    const kw = ((track.title || '') + ' ' + (normArtist(track.artist) || track.artist || '')).trim();
+    if(!kw) return [];
+    const out = [];
+    try{
+      if(source === 'netease'){
+        const arr = await fetchJSON('https://api.qijieya.cn/meting/?type=search&id=' +
+          encodeURIComponent(kw) + '&limit=5&server=netease', 8000);
+        (Array.isArray(arr) ? arr : []).slice(0, 5).forEach(function(it){
+          const id = (String(it.url || '').match(/[?&]id=(\d+)/) || [])[1];
+          if(id) out.push({title:it.name, artist:it.artist, songid:id, n:1});
+        });
+      }else if(source === 'kuwo'){
+        const j = await fetchJSON('https://oiapi.net/api/Kuwo?msg=' +
+          encodeURIComponent(kw) + '&page=1&limit=5', 8000);
+        (Array.isArray(j && j.data) ? j.data : []).slice(0, 5).forEach(function(it, i){
+          if(it.rid == null) return;
+          out.push({title:it.song, artist:it.singer, songid:String(it.rid), n:i + 1});
+        });
+      }else if(source === 'joox'){
+        const j = await fetchJSON('https://apicx.asia/api/joox_music?msg=' + encodeURIComponent(kw) +
+          '&token=' + encodeURIComponent(JOOX_TOKEN) + '&br=' + encodeURIComponent(JOOX_BR), 8000);
+        const songs = (j && j.code === 200 && j.data && Array.isArray(j.data.songs)) ? j.data.songs : [];
+        songs.slice(0, 5).forEach(function(it, i){
+          out.push({title:it['歌曲名称'], artist:it['歌手'], n:i + 1});
+        });
+      }
+    }catch(e){ return out; }
+    return out;
+  }
+
+  async function tryCrossSourceFill(track){
+    if(track.crossResolved) return false;
+    if(!track.title) { track.crossResolved = true; return false; }
+    track.crossResolved = true;
+    // 已经有能用、且不是试听片段的直链时不打扰
+    if(track.audioUrl && !track.isPreview) return false;
+
+    for(const src of CROSS_SOURCES){
+      const list = await crossSearchCandidates(track, src.key);
+      if(!list.length) continue;
+      const ranked = list.map(function(c){ return {c:c, s:crossScore(c, track)}; })
+        .filter(function(x){ return x.s > 0; })
+        .sort(function(a, b){ return b.s - a.s; });
+      // 只挑相似度最高的少数几条试，避免拼错一首歌还反复请求
+      for(const item of ranked.slice(0, 3)){
+        if(item.s < 4) break;   // 标题没完全对上（s<2×标题满分），宁可不换，避免串歌
+        const probe = {
+          uid:'__cross__' + Math.random().toString(36).slice(2),
+          source:src.key, keyword:((track.title || '') + ' ' + (normArtist(track.artist) || '')).trim(),
+          songid:item.c.songid, displayIndex:item.c.n, jooxIndex:item.c.n,
+          title:item.c.title, artist:item.c.artist,
+          cover:null, audioUrl:null, lrc:null, lrcUrl:null,
+          detailsLoaded:false, quality:null, qualityLabel:null
+        };
+        try{ await src.detail(probe); }catch(e){ continue; }
+        if(!probe.audioUrl) continue;
+        // 酷我的无损档（br=1）偶发 410，实测「标题+歌手」搜到的第 1 条几乎必 410，
+        // 靠播放失败再降级要多等一次请求。这里直接从候选里挑一条能播的放首位。
+        const cands = (probe.audioCandidates || []).filter(function(c){ return c && c.url; });
+        const playable = cands.filter(function(c){
+          const fn = String(c.url || '').toLowerCase();
+          return !/\.(flac|wav|ape)(\?|$)/.test(fn) && !/flac|wav|ape/i.test(String(c.format || ''));
+        });
+        // 在能播的档位里挑码率最高的一条（320k > 128k），而不是碰运气取到第一条
+        const byBitrate = playable.slice().sort(function(a, b){
+          return (parseInt(b.bitrate, 10) || 0) - (parseInt(a.bitrate, 10) || 0);
+        });
+        const best = byBitrate[0] || cands[0] || null;
+        if(best){
+          track.audioUrl = best.url;
+          track.audioCandidates = [best].concat(cands.filter(function(c){ return c !== best; }));
+          applyKuwoQuality(track, best);
+        }else{
+          track.audioUrl = probe.audioUrl;
+          if(probe.qualityLabel){ track.quality = probe.quality; track.qualityLabel = probe.qualityLabel; }
+        }
+        track.isPreview = false;
+        if(!track.lrc && probe.lrc) track.lrc = probe.lrc;
+        track.crossFilledFrom = src.key;
+        return true;
+      }
+    }
+    return false;
+  }
+
   async function ensureTrackDetails(track){
     if(track.detailsLoaded && track.audioUrl && (track.lrc || !track.lrcUrl)) return;
     setPlayerStatus(t('playerStatusLoading'));
@@ -1962,6 +2109,7 @@ kbd{
     else if(track.source === 'kuwo') await fetchKuwoDetails(track);
     else if(track.source === 'joox') await fetchJooxDetails(track);
     else await fetchQQDetails(track);
+    if(track.source === 'qq') await tryCrossSourceFill(track);
   }
 
   /* ===================== 歌词 ===================== */
@@ -2275,8 +2423,12 @@ kbd{
   }
   function qualityPill(track){
     if(track.isPreview) return '<span class="pill quality">' + esc(t('preview')) + '</span>';
-    if(!track.qualityLabel) return '';
-    return '<span class="pill quality">' + esc(track.qualityLabel) + '</span>';
+    let html = track.qualityLabel ? '<span class="pill quality">' + esc(track.qualityLabel) + '</span>' : '';
+    if(track.crossFilledFrom && SOURCE_LABEL[track.crossFilledFrom]){
+      html += '<span class="pill cross">' + esc(t('crossFilled').replace('{source}',
+        t(SOURCE_LABEL[track.crossFilledFrom]))) + '</span>';
+    }
+    return html;
   }
   function emptyBlock(text){
     return '<div class="empty"><div class="big">🎧</div>' + esc(text) + '</div>';
