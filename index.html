@@ -316,10 +316,25 @@ main{flex:1;overflow-y:auto;padding:6px 26px 40px;scroll-behavior:smooth}
 /* 歌曲列表 */
 .track-list{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow)}
 .track-row{
-  display:grid;grid-template-columns:36px 48px minmax(0,1fr) minmax(0,160px) 118px 100px;
+  display:grid;grid-template-columns:32px 32px 48px minmax(0,1fr) minmax(0,160px) 118px 100px;
   align-items:center;gap:14px;padding:9px 16px;border-bottom:1px solid var(--line);
   transition:background .2s;cursor:pointer;
 }
+.track-row.selected{background:var(--accent-soft)}
+/* 批量勾选框：自绘样式，避免各浏览器原生 checkbox 外观不一致 */
+.t-check{display:flex;align-items:center;justify-content:center;cursor:pointer}
+.t-check input{position:absolute;opacity:0;width:0;height:0}
+.t-box{
+  width:18px;height:18px;border-radius:5px;border:1.5px solid var(--line);
+  background:var(--surface);display:grid;place-items:center;transition:all .15s;
+}
+.t-box::after{
+  content:"";width:9px;height:5px;border-left:2px solid #fff;border-bottom:2px solid #fff;
+  transform:rotate(-45deg) scale(0);transition:transform .15s;margin-top:-2px;
+}
+.t-check input:checked + .t-box{background:var(--accent);border-color:var(--accent)}
+.t-check input:checked + .t-box::after{transform:rotate(-45deg) scale(1)}
+.t-check input:focus-visible + .t-box{outline:2px solid var(--accent);outline-offset:2px}
 .track-row:last-child{border-bottom:none}
 .track-row:hover{background:var(--surface-2)}
 .track-row.playing{background:var(--accent-soft)}
@@ -387,6 +402,33 @@ main{flex:1;overflow-y:auto;padding:6px 26px 40px;scroll-behavior:smooth}
 .modal-card h3{font-size:18px;font-weight:800;margin-bottom:6px}
 .modal-card p{font-size:13px;color:var(--text-3);margin-bottom:18px}
 .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
+
+/* 批量操作工具条 */
+.batch-bar{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:8px 12px;margin-bottom:8px;
+  border:1px solid var(--line);border-radius:10px;background:var(--surface-2);
+  font-size:13px;
+}
+.batch-bar.active{border-color:var(--accent);background:var(--accent-soft)}
+.bb-all{display:inline-flex;align-items:center;gap:7px;cursor:pointer;color:var(--text-2);font-weight:600}
+.bb-all input{width:15px;height:15px;accent-color:var(--accent);cursor:pointer}
+.bb-count{color:var(--text-3);font-variant-numeric:tabular-nums}
+.bb-spacer{flex:1}
+.batch-bar .btn-ghost{height:30px;padding:0 11px;font-size:12px}
+.batch-bar .btn-ghost:disabled{opacity:.45;cursor:not-allowed}
+
+/* 歌单选择弹窗 */
+.pl-pick-list{display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto}
+.pick-item{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;
+  padding:10px 12px;border:1px solid var(--line);border-radius:10px;
+  background:var(--surface);cursor:pointer;text-align:left;transition:all .15s;
+}
+.pick-item:hover{border-color:var(--accent);background:var(--accent-soft)}
+.pick-name{font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pick-meta{color:var(--text-3);font-size:12px;flex-shrink:0}
+.pick-empty{padding:16px;text-align:center;color:var(--text-3)}
 .kbd-list{display:flex;flex-direction:column;gap:10px}
 .kbd-row{display:flex;align-items:center;justify-content:space-between;gap:16px;font-size:13px;color:var(--text-2)}
 kbd{
@@ -546,13 +588,18 @@ kbd{
   .chip{flex-shrink:0}
   .limit-select{order:3;flex-shrink:0}
   main{padding:4px 14px 30px}
-  .track-row{grid-template-columns:30px 44px minmax(0,1fr) 38px;gap:10px;padding:9px 10px}
+  .track-row{grid-template-columns:28px 28px 44px minmax(0,1fr) 38px;gap:10px;padding:9px 10px}
   .t-album{display:none}
   .t-tags{display:none}
   /* 小屏列表保留「加入歌单」按钮（其余行内操作收起） */
   .t-actions{display:flex;gap:0}
   .t-act{width:34px;height:34px}
   .t-act[data-act="fav"],.t-act[data-act="download"],.t-act[data-act="remove"]{display:none}
+  /* 小屏批量工具条收紧，尽量压到一行内 */
+  .batch-bar{gap:7px;padding:7px 10px}
+  .batch-bar .btn-ghost{height:28px;padding:0 9px;font-size:11px}
+  .batch-bar .btn-ghost .icon{width:14px;height:14px}
+  .bb-all input{width:14px;height:14px}
   .card-row{grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:13px}
   .np-stage{flex-direction:column;align-items:center;gap:8px;padding-top:0}
   .np-left{
@@ -618,7 +665,7 @@ kbd{
   .np-name{font-size:12.5px}
   .brand .name{font-size:13.5px}
   .section-head h2{font-size:17px}
-  .track-row{grid-template-columns:26px 40px minmax(0,1fr) 36px;gap:9px;padding:8px 10px}
+  .track-row{grid-template-columns:26px 24px 40px minmax(0,1fr) 36px;gap:9px;padding:8px 10px}
   .t-cover{width:40px;height:40px}
 }
 </style>
@@ -669,20 +716,12 @@ kbd{
             <input id="searchInput" type="search" placeholder="输入歌名 / 歌手，回车搜索…" autocomplete="off" data-page-node-id="U2W1NUGHwovNfogQD94wVh">
             <button class="btn-primary" id="searchBtn" data-page-node-id="TItWfneLdls3QtzeSpKS3t">搜索</button>
           </div>
-          <!-- 点开搜索框时展开：热门搜索 + 搜索结果 -->
+          <!-- 点开搜索框时展开：只保留热门搜索作为快捷入口；
+               搜索结果已改为独立的「搜索」页面展示，不再挤在下拉浮层里 -->
           <div class="search-panel" id="searchPanel">
             <div class="sp-section" id="hotSection">
               <div class="sp-head"><span data-i18n="hotSearch">热门搜索</span></div>
               <div class="chips" id="hotKeywords"></div>
-            </div>
-            <div class="sp-section" id="resultSection" hidden>
-              <div class="sp-head">
-                <span data-i18n="resultTitle">搜索结果</span>
-                <span class="hint" id="resultHint"></span>
-                <span class="sp-spacer"></span>
-                <button class="btn-ghost" id="loadMoreBtn"><svg class="icon" viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg><span data-i18n="loadMore">加载更多</span></button>
-              </div>
-              <div class="track-list" id="resultList"></div>
             </div>
           </div>
         </div>
@@ -713,7 +752,23 @@ kbd{
               <button class="btn-ghost" id="refreshRecBtn"><svg class="icon" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-.6 4"/><path d="M20 5v6h-6"/></svg><span data-i18n="refreshRec">换一批</span></button>
             </div>
           </div>
+          <div class="batch-slot" data-scope="recommend"></div>
           <div class="track-list" id="recommendList"></div>
+        </section>
+
+        <!-- 搜索结果页：顶栏回车 / 点热门词后跳转到这里展示 -->
+        <section class="view" id="view-search" hidden>
+          <div class="section-head">
+            <h2><span data-i18n="resultTitle">搜索结果</span><span class="hint" id="resultHint"></span></h2>
+            <div class="section-actions">
+              <button class="btn-ghost" id="loadMoreBtn"><svg class="icon" viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg><span data-i18n="loadMore">加载更多</span></button>
+            </div>
+          </div>
+          <div class="batch-slot" data-scope="results"></div>
+          <div id="resultSection" hidden>
+            <div class="track-list" id="resultList"></div>
+          </div>
+          <div class="empty" id="searchEmpty"><div class="big">🔍</div><span data-i18n="emptySearchResults">还没有搜索结果，用顶部搜索框试试</span></div>
         </section>
 
         <!-- 收藏 -->
@@ -725,6 +780,7 @@ kbd{
               <button class="btn-ghost btn-danger" id="clearFavBtn" data-page-node-id="YPKqCuHtfF9Esopsg6M6CB"><svg class="icon" viewBox="0 0 24 24" data-page-node-id="Ds9qZPzJbwPowP7jfZEyBO"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" data-page-node-id="PpyQx9WiCJaXjcKkcuNHyd"/></svg><span data-i18n="clearFav" data-page-node-id="CsTvRrwvR1Bf6eWTj1tHcc">清空收藏</span></button>
             </div>
           </div>
+          <div class="batch-slot" data-scope="favorites"></div>
           <div class="track-list" id="favList" data-page-node-id="MDGuTIIsz6mQLGjEDwSWvB"></div>
         </section>
 
@@ -736,6 +792,7 @@ kbd{
               <button class="btn-ghost btn-danger" id="clearHistoryBtn2" data-page-node-id="yka62WF8l4BMtlxtRZvfDf"><svg class="icon" viewBox="0 0 24 24" data-page-node-id="sVbAKgqScBCIfyxKtxAVNm"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" data-page-node-id="C8rOlSkchZr5NO1TK1WBY9"/></svg><span data-i18n="clearHistory" data-page-node-id="YfACBO0CjTpqy47PMt42wG">清空记录</span></button>
             </div>
           </div>
+          <div class="batch-slot" data-scope="history"></div>
           <div class="track-list" id="hisList" data-page-node-id="V1aDt0Zj0oBkEvxuG9FAxW"></div>
         </section>
 
@@ -751,7 +808,8 @@ kbd{
               <button class="btn-ghost" id="exportBtn" data-page-node-id="4MyVRKJeRZZCfdtHV9fMb2"><svg class="icon" viewBox="0 0 24 24" data-page-node-id="Yob9fycaClvK87E69fbGiR"><path d="M12 3v12M7 10l5 5 5-5M4 20h16" data-page-node-id="P14Gv92YwXoCqywmEQKCAm"/></svg><span data-i18n="exportPlaylist" data-page-node-id="LC22HOuLgsXvjUHjxMvaQn">导出数据</span></button>
               <input type="file" id="importInput" accept="application/json,.json" hidden data-page-node-id="9frna7gayX7JPbGzQ2FHZX">
             </div>
-            <div class="track-list" id="plList" data-page-node-id="Kll5TOaQ46KQBxlL0YWG6d"></div>
+            <div class="batch-slot" data-scope="playlist"></div>
+          <div class="track-list" id="plList" data-page-node-id="Kll5TOaQ46KQBxlL0YWG6d"></div>
           </div>
         </section>
 
@@ -834,6 +892,18 @@ kbd{
   </div>
 </div>
 
+<div class="modal" id="pickModal">
+  <div class="modal-card">
+    <h3 data-i18n="pickPlaylist">选择歌单</h3>
+    <p id="pickHint"></p>
+    <div class="pl-pick-list" id="pickList"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="pickCancel" data-i18n="modalCancel">取消</button>
+      <button class="btn-ghost" id="pickNew" data-i18n="newPlaylist">新建歌单</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal" id="scModal" data-page-node-id="3JUAT6WulD9kIfab25XVyc">
   <div class="modal-card" data-page-node-id="8Tm3oMj8uZLd4a9gq7euUm">
     <h3 data-i18n="shortcutPanelTitle" data-page-node-id="1VPVG8swi72YF0qpoKqX7j">快捷键说明</h3>
@@ -866,6 +936,13 @@ kbd{
     zh:{
       sourceNetease:"网易云", sourceQQ:"QQ音乐", sourceKuwo:"酷我", sourceJoox:"JOOX",
       preview:"试听片段", fullVersion:"完整版",
+      emptySearchResults:"还没有搜索结果，用顶部搜索框试试",
+      selectAll:"全选", selectedCount:"已选 {n} 首",
+      batchFav:"批量收藏", batchAdd:"加入歌单", clearSelection:"取消选择",
+      toastNoSelection:"请先勾选歌曲", toastBatchFavAdded:"已收藏 {n} 首",
+      toastBatchFavNone:"选中的歌曲都收藏过了",
+      toastBatchAddAdded:"已加入《{name}》{n} 首", toastBatchAddNone:"这些歌曲都已在歌单里",
+      pickPlaylist:"选择歌单", pickPlaylistHint:"把 {n} 首歌加入到",
       searchStatusIdle:"尚未搜索，试试输入“周杰伦”？", searchStatusSearching:"正在搜索中…",
       searchStatusDone:"搜索完成。", searchStatusNoSource:"请至少选择一个音乐源。",
       loadMore:"加载更多", continueTitle:"继续聆听", continueHint:"来自本机播放记录",
@@ -916,6 +993,13 @@ kbd{
     en:{
       sourceNetease:"Netease", sourceQQ:"QQ Music", sourceKuwo:"Kuwo", sourceJoox:"JOOX",
       preview:"Preview", fullVersion:"Full",
+      emptySearchResults:"No results yet — try the search box above",
+      selectAll:"Select all", selectedCount:"{n} selected",
+      batchFav:"Favorite", batchAdd:"Add to playlist", clearSelection:"Clear",
+      toastNoSelection:"Select songs first", toastBatchFavAdded:"Added {n} to favorites",
+      toastBatchFavNone:"Already in favorites",
+      toastBatchAddAdded:'Added {n} to "{name}"', toastBatchAddNone:"Already in that playlist",
+      pickPlaylist:"Choose playlist", pickPlaylistHint:"Add {n} songs to",
       searchStatusIdle:"No search yet. Try \"JJ Lin\"?", searchStatusSearching:"Searching…",
       searchStatusDone:"Search completed.", searchStatusNoSource:"Select at least one source.",
       loadMore:"Load more", continueTitle:"Keep Listening", continueHint:"from local history",
@@ -988,6 +1072,8 @@ kbd{
     playContext:{type:'results', index:-1, playlistId:null},
     playMode:'list',
     isPlaying:false,
+    selection:new Set(),      // 批量选择：存 track.uid
+    pendingBatchAdd:[],       // 待批量加入歌单的曲目（弹窗选歌单期间暂存）
     lyricLines:[],
     currentLyricIndex:-1,
     searchInProgress:false,
@@ -1615,6 +1701,7 @@ kbd{
     }
     wrap.innerHTML = state.recommendList.map(function(track, i){ return rowHTML(track, i, 'recommend'); }).join('');
     bindRows(wrap, 'recommend');
+    renderBatchBars();
   }
 
   /* ===================== 详情 ===================== */
@@ -2202,24 +2289,32 @@ kbd{
     dom.searchCount.textContent = String(state.searchResults.length);
     dom.resultHint.textContent = state.searchKeyword ? ('“' + state.searchKeyword + '”') : '';
     if(dom.resultSection) dom.resultSection.hidden = !list.length;
-    if(dom.hotSection) dom.hotSection.hidden = !!list.length;
+    if(dom.searchEmpty) dom.searchEmpty.hidden = !!list.length;
+    /* 结果已改到独立页面展示，顶栏浮层只剩热门搜索，不再随结果切换显隐 */
     if(!list.length){
       wrap.innerHTML = '';
       return;
     }
     wrap.innerHTML = list.map(function(track, i){ return rowHTML(track, i, 'results'); }).join('');
     bindRows(wrap, 'results');
+    renderBatchBars();
   }
 
   function rowHTML(track, i, type){
     const playing = state.currentTrack && state.currentTrack.uid === track.uid;
     const fav = isFavorite(track);
+    const sel = state.selection.has(track.uid);
+    /* 勾选框：批量收藏 / 批量加入歌单用。用 label 包 input 以便自绘样式，
+       点击时需要在 bindRows 里阻止冒泡，否则会被行点击当成「播放」 */
+    const check = '<label class="t-check"><input type="checkbox" data-check="' + esc(track.uid) + '"' +
+      (sel ? ' checked' : '') + '><span class="t-box"></span></label>';
     const left = '<span class="t-index">' + (i + 1) + '</span>';
     const albumCell = (type === 'history')
       ? '<div class="t-album">' + esc(relTime(track._playedAt || 0)) + (track._position ? ' · ' + esc(formatTime(track._position)) : '') + '</div>'
       : '<div class="t-album">' + esc(track.album || '—') + '</div>';
     return '' +
-      '<div class="track-row' + (playing ? ' playing' : '') + '" data-uid="' + esc(track.uid) + '" data-index="' + i + '">' +
+      '<div class="track-row' + (playing ? ' playing' : '') + (sel ? ' selected' : '') + '" data-uid="' + esc(track.uid) + '" data-index="' + i + '">' +
+        check +
         left +
         '<div class="t-cover">' + coverHTML(track) + '</div>' +
         '<div class="t-main">' +
@@ -2242,6 +2337,17 @@ kbd{
       const uid = row.dataset.uid;
       const idx = parseInt(row.dataset.index, 10);
       row.addEventListener('click', function(){ playFromList(type, idx, type === 'playlist' ? (dom.plSelect ? dom.plSelect.value : null) : null); });
+      /* 勾选框不能冒泡到行，否则点击勾选会同时触发播放 */
+      const chk = row.querySelector('.t-check');
+      if(chk) chk.addEventListener('click', function(ev){ ev.stopPropagation(); });
+      const cb = row.querySelector('[data-check]');
+      if(cb){
+        cb.addEventListener('change', function(){
+          toggleSelect(uid, cb.checked);
+          row.classList.toggle('selected', cb.checked);
+          updateAllBatchBars();
+        });
+      }
       $$('[data-act]', row).forEach(function(btn){
         btn.addEventListener('click', function(ev){
           ev.stopPropagation();
@@ -2261,6 +2367,172 @@ kbd{
         });
       });
     });
+  }
+
+  /* ===================== 批量选择 / 批量收藏 / 批量加入歌单 ===================== */
+  /* 列表类型 → 数据源。与 playFromList 的取数逻辑保持一致 */
+  function getListByType(type, plId){
+    if(type === 'results') return getInterleavedSearchList();
+    if(type === 'recommend') return state.recommendList;
+    if(type === 'favorites') return state.favorites;
+    if(type === 'history') return state.history.map(function(h){ return h.track; });
+    const pl = state.playlists.find(function(p){ return p.id === plId; });
+    return pl ? pl.tracks : [];
+  }
+  function scopeTracks(scope){
+    return getListByType(scope, dom.plSelect ? dom.plSelect.value : null);
+  }
+  /* 只取「当前列表里」被选中的，避免跨页选择互相干扰 */
+  function selectedTracks(scope){
+    return scopeTracks(scope).filter(function(tr){ return tr && state.selection.has(tr.uid); });
+  }
+  function toggleSelect(uid, on){
+    if(on === undefined) on = !state.selection.has(uid);
+    if(on) state.selection.add(uid);
+    else state.selection.delete(uid);
+    return on;
+  }
+  function clearSelection(){
+    state.selection.clear();
+    updateAllBatchBars();
+  }
+
+  function batchBarHTML(scope){
+    return '' +
+      '<div class="batch-bar" data-batch-scope="' + esc(scope) + '">' +
+        '<label class="bb-all"><input type="checkbox" data-batch-all><span>' + esc(t('selectAll')) + '</span></label>' +
+        '<span class="bb-count" data-batch-count></span>' +
+        '<span class="bb-spacer"></span>' +
+        '<button class="btn-ghost" data-batch-act="fav" disabled>' +
+          '<svg class="icon" viewBox="0 0 24 24"><path d="M12 21s-7.5-4.7-9.5-9.2C1.2 8.6 3 5.5 6.2 5.1c2-.3 4 .7 5.8 3 1.8-2.3 3.8-3.3 5.8-3 3.2.4 5 3.5 3.7 6.7C19.5 16.3 12 21 12 21z"/></svg>' +
+          '<span>' + esc(t('batchFav')) + '</span></button>' +
+        '<button class="btn-ghost" data-batch-act="add" disabled>' +
+          '<svg class="icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>' +
+          '<span>' + esc(t('batchAdd')) + '</span></button>' +
+        '<button class="btn-ghost" data-batch-act="clear" disabled>' + esc(t('clearSelection')) + '</button>' +
+      '</div>';
+  }
+
+  /* 工具条只生成一次，之后只更新状态 —— 避免重建导致勾选状态与事件丢失 */
+  function renderBatchBars(){
+    $$('.batch-slot').forEach(function(slot){
+      const scope = slot.dataset.scope;
+      if(!scope) return;
+      if(slot.dataset.filled !== '1'){
+        slot.innerHTML = batchBarHTML(scope);
+        slot.dataset.filled = '1';
+      }
+      updateBatchBar(scope);
+    });
+  }
+
+  function updateBatchBar(scope){
+    const bar = document.querySelector('.batch-bar[data-batch-scope="' + scope + '"]');
+    if(!bar) return;
+    const list = scopeTracks(scope);
+    const n = list.filter(function(tr){ return tr && state.selection.has(tr.uid); }).length;
+    const cnt = bar.querySelector('[data-batch-count]');
+    if(cnt) cnt.textContent = t('selectedCount').replace('{n}', String(n));
+    const all = bar.querySelector('[data-batch-all]');
+    if(all){
+      all.checked = list.length > 0 && n === list.length;
+      all.indeterminate = n > 0 && n < list.length;
+    }
+    $$('[data-batch-act]', bar).forEach(function(btn){ btn.disabled = (n === 0); });
+    bar.classList.toggle('active', n > 0);
+  }
+
+  function updateAllBatchBars(){
+    $$('.batch-bar').forEach(function(bar){ updateBatchBar(bar.dataset.batchScope); });
+  }
+
+  /* 选中态变化后需要重绘列表，让每行的勾选框同步 */
+  function renderListByScope(scope){
+    if(scope === 'results') renderResults();
+    else if(scope === 'recommend') renderRecommend();
+    else if(scope === 'favorites') renderFavorites();
+    else if(scope === 'history') renderHistoryViews();
+    else renderPlaylistViews();
+    renderBatchBars();
+  }
+
+  function handleBatchAction(scope, act){
+    if(act === 'clear'){
+      clearSelection();
+      renderListByScope(scope);
+      return;
+    }
+    const tracks = selectedTracks(scope);
+    if(!tracks.length){ showToast(t('toastNoSelection')); return; }
+    if(act === 'fav') batchFavorite(tracks);
+    else if(act === 'add') openPlaylistPicker(tracks);
+  }
+
+  /* 批量收藏：只增不减（toggleFavorite 是切换语义，不适合批量） */
+  function batchFavorite(tracks){
+    let added = 0;
+    tracks.forEach(function(tr){
+      if(isFavorite(tr)) return;
+      state.favorites.push(tr);
+      added++;
+    });
+    if(!added){ showToast(t('toastBatchFavNone')); return; }
+    saveLibrary();
+    /* 操作完成后清空选择：否则残留的勾选会让下一次点击变成「取消选中」，很容易误操作 */
+    clearSelection();
+    renderAll();
+    showToast(t('toastBatchFavAdded').replace('{n}', String(added)));
+  }
+
+  function addTracksToPlaylist(pl, tracks){
+    let added = 0;
+    tracks.forEach(function(tr){
+      if(!tr) return;
+      if(pl.tracks.some(function(tk){ return tk.uid === tr.uid; })) return;
+      pl.tracks.push(tr);
+      added++;
+    });
+    return added;
+  }
+
+  /* ===================== 歌单选择弹窗（批量加入） ===================== */
+  function openPlaylistPicker(tracks){
+    if(!tracks || !tracks.length){ showToast(t('toastNoSelection')); return; }
+    state.pendingBatchAdd = tracks.slice();
+    const hint = $('pickHint');
+    if(hint) hint.textContent = t('pickPlaylistHint').replace('{n}', String(tracks.length));
+    renderPickList();
+    if(dom.pickModal) dom.pickModal.classList.add('show');
+  }
+  function closePickModal(){
+    if(dom.pickModal) dom.pickModal.classList.remove('show');
+    state.pendingBatchAdd = [];
+  }
+  function renderPickList(){
+    const wrap = $('pickList');
+    if(!wrap) return;
+    if(!state.playlists.length){
+      wrap.innerHTML = '<div class="pick-empty">' + esc(t('toastNoPl')) + '</div>';
+      return;
+    }
+    wrap.innerHTML = state.playlists.map(function(pl){
+      return '<button class="pick-item" data-pl="' + esc(pl.id) + '">' +
+        '<span class="pick-name">' + esc(pl.name) + '</span>' +
+        '<span class="pick-meta">' + ((pl.tracks || []).length) + '</span>' +
+        '</button>';
+    }).join('');
+  }
+  function confirmPickPlaylist(plId){
+    const pl = state.playlists.find(function(p){ return p.id === plId; });
+    const tracks = state.pendingBatchAdd || [];
+    if(!pl || !tracks.length){ closePickModal(); return; }
+    const added = addTracksToPlaylist(pl, tracks);
+    closePickModal();
+    if(!added){ showToast(t('toastBatchAddNone')); return; }
+    saveLibrary();
+    clearSelection();
+    renderAll();
+    showToast(t('toastBatchAddAdded').replace('{name}', pl.name).replace('{n}', String(added)));
   }
 
   async function downloadTrack(track){
@@ -2285,6 +2557,7 @@ kbd{
       bindRows(wrap, 'history');
     }
     if(dom.navHisCount) dom.navHisCount.textContent = String(state.history.length);
+    renderBatchBars();
   }
 
   function renderFavorites(){
@@ -2298,6 +2571,7 @@ kbd{
     }
     if(dom.navFavCount) dom.navFavCount.textContent = String(state.favorites.length);
     if(dom.favBtn) dom.favBtn.classList.toggle('fav-on', isFavorite(state.currentTrack));
+    renderBatchBars();
   }
 
   function renderPlaylistOptions(){
@@ -2367,6 +2641,7 @@ kbd{
         bindRows(list, 'playlist');
       }
     }
+    renderBatchBars();
   }
 
   function renderNowPlaying(){
@@ -2408,6 +2683,7 @@ kbd{
     renderFavorites();
     renderPlaylistViews();
     renderNowPlaying();
+    renderBatchBars();
   }
 
   /* ===================== 视图切换 ===================== */
@@ -2415,7 +2691,7 @@ kbd{
     state.view = view;
     if(view !== 'nowplaying') state.lastListView = view;
     $$('#nav a').forEach(function(a){ a.classList.toggle('active', a.dataset.view === view); });
-    ['discover','favorites','history','playlists','nowplaying'].forEach(function(v){
+    ['discover','search','favorites','history','playlists','nowplaying'].forEach(function(v){
       const el = $('view-' + v);
       if(el) el.hidden = (v !== view);
     });
@@ -2587,6 +2863,7 @@ kbd{
     dom.resultList = $('resultList');
     dom.resultHint = $('resultHint');
     dom.resultSection = $('resultSection');
+    dom.searchEmpty = $('searchEmpty');
     dom.hotSection = $('hotSection');
     dom.searchPanel = $('searchPanel');
     dom.hotKeywords = $('hotKeywords');
@@ -2638,6 +2915,7 @@ kbd{
     dom.themeBtn = $('themeBtn');
 
     dom.plModal = $('plModal');
+    dom.pickModal = $('pickModal');
     dom.plNameInput = $('plNameInput');
     dom.scModal = $('scModal');
     dom.importInput = $('importInput');
@@ -2667,11 +2945,18 @@ kbd{
     const pl = {id:'pl-' + Date.now() + '-' + Math.random().toString(16).slice(2), name:name, tracks:[]};
     state.playlists.push(pl);
     state.playContext.playlistId = pl.id;
+    /* 若是从批量「加入歌单」里点「新建歌单」进来的，创建后直接把这批歌放进去 */
+    const pending = state.pendingBatchAdd || [];
+    let added = 0;
+    if(pending.length){ added = addTracksToPlaylist(pl, pending); clearSelection(); }
+    state.pendingBatchAdd = [];
     saveLibrary();
     closePlModal();
     if(dom.plSelect) dom.plSelect.value = pl.id;
-    renderPlaylistViews();
-    showToast(t('toastPlCreated'));
+    renderAll();
+    showToast(pending.length
+      ? t('toastBatchAddAdded').replace('{name}', pl.name).replace('{n}', String(added))
+      : t('toastPlCreated'));
   }
 
   function setupEvents(){
@@ -2694,7 +2979,10 @@ kbd{
       if(!kw){ showToast(t('toastNeedKeyword')); return; }
       state.searchKeyword = kw;
       state.noMoreResults = false;
-      openSearchPanel();
+      /* 结果改在独立的「搜索」页展示：收起顶栏浮层并切过去 */
+      closeSearchPanel();
+      dom.searchInput.blur();
+      switchView('search');
       searchAllSources(true);
     }
     dom.searchBtn.addEventListener('click', runSearch);
@@ -2734,7 +3022,8 @@ kbd{
           dom.searchInput.value = btn.textContent;
           state.searchKeyword = btn.textContent;
           state.noMoreResults = false;
-          openSearchPanel();
+          closeSearchPanel();
+          switchView('search');
           searchAllSources(true);
         });
       });
@@ -2747,6 +3036,37 @@ kbd{
     $('plConfirm').addEventListener('click', createPlaylist);
     $('plCancel').addEventListener('click', closePlModal);
     dom.plModal.addEventListener('click', function(e){ if(e.target === dom.plModal) closePlModal(); });
+
+    /* 歌单选择弹窗（批量加入歌单） */
+    $('pickCancel').addEventListener('click', closePickModal);
+    $('pickNew').addEventListener('click', function(){
+      /* 保留 pendingBatchAdd，关掉选择弹窗去新建；创建完成后会自动把这批歌加进去 */
+      if(dom.pickModal) dom.pickModal.classList.remove('show');
+      openPlModal();
+    });
+    if(dom.pickModal) dom.pickModal.addEventListener('click', function(e){ if(e.target === dom.pickModal) closePickModal(); });
+    $('pickList').addEventListener('click', function(e){
+      const btn = e.target.closest ? e.target.closest('.pick-item') : null;
+      if(btn) confirmPickPlaylist(btn.dataset.pl);
+    });
+
+    /* 批量工具条用事件委托：列表会重绘，直接绑在按钮上会随重绘丢失 */
+    document.addEventListener('click', function(e){
+      const btn = e.target.closest ? e.target.closest('[data-batch-act]') : null;
+      if(!btn || btn.disabled) return;
+      const bar = btn.closest('.batch-bar');
+      if(!bar) return;
+      handleBatchAction(bar.dataset.batchScope, btn.dataset.batchAct);
+    });
+    document.addEventListener('change', function(e){
+      const all = e.target.closest ? e.target.closest('[data-batch-all]') : null;
+      if(!all) return;
+      const bar = all.closest('.batch-bar');
+      if(!bar) return;
+      const scope = bar.dataset.batchScope;
+      scopeTracks(scope).forEach(function(tr){ if(tr) toggleSelect(tr.uid, all.checked); });
+      renderListByScope(scope);
+    });
     $('delPlBtn').addEventListener('click', function(){
       const plId = dom.plSelect.value;
       if(!plId){ showToast(t('toastNoPl')); return; }
@@ -2885,21 +3205,23 @@ kbd{
     $('scClose').addEventListener('click', function(){ dom.scModal.classList.remove('show'); });
     dom.scModal.addEventListener('click', function(e){ if(e.target === dom.scModal) dom.scModal.classList.remove('show'); });
 
-    // 搜索面板滚到底自动加载更多
-    if(dom.searchPanel) dom.searchPanel.addEventListener('scroll', function(){
-      if(!state.searchPanelOpen) return;
+    // 搜索结果页滚到底自动加载更多（结果已移到 #view-search，滚动容器是 main）
+    const mainScroll = $('mainScroll');
+    if(mainScroll) mainScroll.addEventListener('scroll', function(){
+      if(state.view !== 'search') return;
       if(state.searchInProgress || state.noMoreResults) return;
-      const el = dom.searchPanel;
-      if(el.scrollTop + el.clientHeight >= el.scrollHeight - 120) requestMoreResults();
+      if(mainScroll.scrollTop + mainScroll.clientHeight >= mainScroll.scrollHeight - 120) requestMoreResults();
     });
 
     document.addEventListener('keydown', function(e){
       const tag = (document.activeElement && document.activeElement.tagName || '').toLowerCase();
       const typing = (tag === 'input' || tag === 'textarea' || tag === 'select');
-      const modalOpen = dom.plModal.classList.contains('show') || dom.scModal.classList.contains('show');
+      const modalOpen = dom.plModal.classList.contains('show') || dom.scModal.classList.contains('show')
+        || (dom.pickModal && dom.pickModal.classList.contains('show'));
 
       if(e.key === 'Escape'){
         if(dom.plModal.classList.contains('show')) closePlModal();
+        if(dom.pickModal && dom.pickModal.classList.contains('show')) closePickModal();
         dom.scModal.classList.remove('show');
         if(state.searchPanelOpen){ closeSearchPanel(); dom.searchInput.blur(); }
         if(state.view === 'nowplaying') switchView(state.lastListView || 'discover');
@@ -2975,6 +3297,7 @@ kbd{
     setupEvents();
     switchView('discover');
     renderLyrics();
+    renderBatchBars();
     loadRecommendations(false);
   }
 
