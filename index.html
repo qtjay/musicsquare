@@ -362,6 +362,13 @@ main{flex:1;overflow-y:auto;padding:6px 26px 40px;scroll-behavior:smooth}
 .pill .dot.joox{background:#2f7ef7}
 .pill.quality{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-strong)}
 .pill.cross{background:color-mix(in oklab, var(--accent) 14%, transparent);border-style:dashed}
+.proxy-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}
+.proxy-field{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-2)}
+.proxy-field input{
+  width:min(320px,60vw);height:32px;padding:0 10px;border-radius:8px;
+  border:1px solid var(--line);background:var(--surface);color:var(--text);font-size:13px;
+}
+.proxy-hint{font-size:12px;color:var(--text-3)}
 .t-actions{display:flex;align-items:center;justify-content:flex-end;gap:2px}
 .t-act{width:31px;height:31px;border-radius:50%;display:grid;place-items:center;color:var(--text-3);transition:all .2s}
 .t-act .icon{width:16px;height:16px}
@@ -809,6 +816,16 @@ kbd{
               <button class="btn-ghost" id="exportBtn" data-page-node-id="4MyVRKJeRZZCfdtHV9fMb2"><svg class="icon" viewBox="0 0 24 24" data-page-node-id="Yob9fycaClvK87E69fbGiR"><path d="M12 3v12M7 10l5 5 5-5M4 20h16" data-page-node-id="P14Gv92YwXoCqywmEQKCAm"/></svg><span data-i18n="exportPlaylist" data-page-node-id="LC22HOuLgsXvjUHjxMvaQn">导出数据</span></button>
               <input type="file" id="importInput" accept="application/json,.json" hidden data-page-node-id="9frna7gayX7JPbGzQ2FHZX">
             </div>
+            <div class="proxy-row">
+              <label class="proxy-field">
+                <span data-i18n="qqProxyLabel">QQ 官方音源代理</span>
+                <input type="text" id="qqProxyInput" spellcheck="false"
+                  placeholder="https://your-worker.workers.dev/?url=">
+              </label>
+              <button class="btn-ghost" id="qqProxySave"><span data-i18n="save">保存</span></button>
+              <button class="btn-ghost" id="qqProxyClear"><span data-i18n="clearProxy">清除</span></button>
+              <span class="proxy-hint" id="qqProxyHint"></span>
+            </div>
             <div class="batch-slot" data-scope="playlist"></div>
           <div class="track-list" id="plList" data-page-node-id="Kll5TOaQ46KQBxlL0YWG6d"></div>
           </div>
@@ -985,6 +1002,10 @@ kbd{
       toastPlaymodeShuffle:"播放模式：随机播放",
       modalNewPlaylistTitle:"新建歌单", modalNewPlaylistDesc:"给你的歌单取一个名字吧～",
       modalConfirm:"确定", modalCancel:"取消",
+      save:"保存", clearProxy:"清除",
+      qqProxyLabel:"QQ 官方音源代理", qqProxyPlaceholder:"留空则不启用官方接口",
+      qqProxySaved:"已保存，下次搜索生效", qqProxyCleared:"已清除，恢复默认音源",
+      qqProxyInvalid:"地址要以 http:// 或 https:// 开头",
       shortcutPanelTitle:"快捷键说明", shortcutPanelDesc:"使用键盘可以更方便地控制播放器：",
       shortcutPlayPause:"播放 / 暂停", shortcutSeek:"快退 / 快进 5 秒", shortcutVolume:"音量加 / 减",
       shortcutPrevNext:"上一首 / 下一首", shortcutFav:"收藏 / 取消收藏", shortcutLyrics:"播放页 / 歌词",
@@ -1043,6 +1064,10 @@ kbd{
       toastPlaymodeShuffle:"Mode: shuffle",
       modalNewPlaylistTitle:"New Playlist", modalNewPlaylistDesc:"Give it a name.",
       modalConfirm:"OK", modalCancel:"Cancel",
+      save:"Save", clearProxy:"Clear",
+      qqProxyLabel:"QQ official API proxy", qqProxyPlaceholder:"Leave empty to keep the default sources",
+      qqProxySaved:"Saved, takes effect on the next search", qqProxyCleared:"Cleared, back to the default sources",
+      qqProxyInvalid:"The URL must start with http:// or https://",
       shortcutPanelTitle:"Keyboard Shortcuts", shortcutPanelDesc:"Control the player with your keyboard:",
       shortcutPlayPause:"Play / Pause", shortcutSeek:"Seek -5s / +5s", shortcutVolume:"Volume up / down",
       shortcutPrevNext:"Previous / Next", shortcutFav:"Favorite", shortcutLyrics:"Now playing / lyrics",
@@ -1299,7 +1324,22 @@ kbd{
     return added;
   }
 
+  /* 搜过官方接口就走官方：它不依赖第三方服务，还带时长和专辑；
+     拿不到（没配代理 / 代理挂了 / 官方返回空）再照原样退回 meting → tang。 */
   async function searchQQ(kw, limit){
+    if(getQQProxy()){
+      const official = await qqOfficialSearch(kw, limit).catch(function(){ return []; });
+      let added = 0;
+      official.slice(0, limit || official.length).forEach(function(x, idx){
+        const track = makeQQTrack(x.songmid, idx, kw, {
+          title:x.title, artist:x.artist, album:x.album,
+          durationSec:parseIntervalSec(x.sec),
+          qqOfficial:true
+        });
+        if(track) added++;
+      });
+      if(added > 0) return added;
+    }
     const added = await searchQQMeting(kw, limit);
     if(added > 0) return added;
     return searchQQTang(kw, limit);
@@ -1822,6 +1862,9 @@ kbd{
       track.pay = d.pay || track.pay;
       track.qqQualityText = d.quality || track.qqQualityText || null;
       track.audioUrl = toHttps(d.url);
+      // vkeys 的时长写在 interval（"4分29秒"）里，time 字段其实是发行日期
+      const vSec = parseIntervalSec(d.interval);
+      if(vSec) track.durationSec = vSec;
       // 只有确认是试听片段才打标记：vkeys 有时会给完整版（甚至是无损 FLAC），
       // 一刀切标成"试听片段"会把这些歌误伤。
       track.isPreview = isQQPreviewPayload(d, d.url);
@@ -1846,6 +1889,8 @@ kbd{
       track.pageUrl = d.song_h5_url || track.pageUrl;
       track.lrc = d.song_lyric || d.lyric || track.lrc;
       const best = pickQQPlayUrl(d);
+      // 记下真实时长，跨源补位要靠它做 ±5 秒容差（tang 给的是秒数）
+      if(d.song_play_time) track.durationSec = parseIntervalSec(d.song_play_time);
       track.audioUrl = best.url ? toHttps(best.url) : track.audioUrl;
       track.qqQualityText = best.text || (d.vip ? ('VIP:' + d.vip) : null) || track.qqQualityText;
       if(best.tag && best.label){ track.quality = best.tag; track.qualityLabel = best.label; }
@@ -2002,18 +2047,210 @@ kbd{
     {key:'joox',    detail:function(tr){ return fetchJooxDetails(tr); }}
   ];
 
-  /* 名称相似度打分。跨源同名歌写法差异很大（网易给「周杰伦/温岚/吴宗宪」），
-     所以标题相等或互为子串才算命中，歌手能对应再加分；标题完全对不上直接排除。 */
-  function crossScore(cand, target){
-    const tt = normTitle(target.title), ta = normArtist(target.artist);
-    const ct = normTitle(cand.title), ca = normArtist(cand.artist);
-    if(!tt || !ct) return 0;
-    let score = 0;
-    if(ct === tt) score += 2;
-    else if(ct.indexOf(tt) >= 0 || tt.indexOf(ct) >= 0) score += 1;
-    else return 0;
-    if(ta && ca && (ca === ta || ca.indexOf(ta) >= 0 || ta.indexOf(ca) >= 0)) score += 2;
-    return score;
+  /* ===================== QQ 官方接口（可选，需自建代理） =====================
+     u.y.qq.com 是洛雪 musicSdk/tx 走的官方接口，元数据最全、也不依赖第三方服务。
+     它有两个硬约束，必须说清楚：
+       1. 服务端不返回 Access-Control-Allow-Origin，纯前端直连会被浏览器拦下
+       2. 付费曲目的播放链接（CgiGetVkey 的 purl）依然为空 —— 洛雪自己也没辙，
+          它的 getMusicUrl 同样委托给自定义音源
+     所以它的定位是「可选的稳定性增强」：填了代理地址才启用，用来改善搜索与元数据；
+     没填就完全不调用，行为与原来完全一致。
+
+     公共 CORS 代理实测全部不可用（allorigins 超时、corsproxy.io 要 API key、
+     cors-anywhere 需授权、cors.lol 限流、codetabs 超时），因此不内置任何公共代理地址，
+     需要自己在设置里填一个可控的代理（仓库另附一份可直接部署的 Worker 脚本）。 */
+  const QQ_PROXY_KEY = 'musicsquare-qq-proxy';
+  const QQ_API = 'https://u.y.qq.com/cgi-bin/';
+  const QQ_SIGN_PART1 = [23, 14, 6, 36, 16, 40, 7, 19];
+  const QQ_SIGN_PART2 = [16, 1, 32, 12, 19, 27, 8, 5];
+  const QQ_SIGN_SCRAMBLE = [89, 39, 179, 150, 218, 82, 58, 252, 177, 52, 186, 123, 120, 64, 242, 133, 143, 161, 121, 179];
+
+  function getQQProxy(){
+    try{ return (localStorage.getItem(QQ_PROXY_KEY) || '').trim(); }catch(e){ return ''; }
+  }
+  function setQQProxy(v){
+    try{
+      if(v && v.trim()) localStorage.setItem(QQ_PROXY_KEY, v.trim());
+      else localStorage.removeItem(QQ_PROXY_KEY);
+    }catch(e){}
+  }
+
+  /* 洛雪 tx/utils/crypto.js 的 zzcSign，用浏览器 WebCrypto 实现：
+     SHA-1 → 两张索引表取字符 → 逐字节 XOR 查表 → base64 去掉 \\ / + =
+     无 Cookie、无密钥、无服务端参与，纯前端可算。 */
+  async function zzcSign(text){
+    const digest = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(text));
+    const hash = Array.from(new Uint8Array(digest))
+      .map(function(b){ return b.toString(16).padStart(2, '0'); }).join('');
+    const p1 = QQ_SIGN_PART1.map(function(i){ return hash[i]; }).join('');
+    const p2 = QQ_SIGN_PART2.map(function(i){ return hash[i]; }).join('');
+    const p3 = QQ_SIGN_SCRAMBLE.map(function(v, i){
+      return v ^ parseInt(hash.slice(i * 2, i * 2 + 2), 16);
+    });
+    const b64 = btoa(String.fromCharCode.apply(null, p3)).replace(/[\\/+=]/g, '');
+    return ('zzc' + p1 + b64 + p2).toLowerCase();
+  }
+
+  function qqSearchId(){
+    let g = '';
+    for(let i = 0; i < 32; i++) g += Math.floor(Math.random() * 16).toString(16);
+    return g.toUpperCase() + String(Math.floor(Math.random() * 100000)).padStart(5, '0');
+  }
+
+  async function qqOfficialRequest(path, payload){
+    const proxy = getQQProxy();
+    if(!proxy) return null;
+    const ctrl = new AbortController();
+    const timer = setTimeout(function(){ ctrl.abort(); }, 10000);
+    try{
+      const r = await fetch(proxy + encodeURIComponent(QQ_API + path), {
+        method:'POST', signal:ctrl.signal, redirect:'follow',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(payload)
+      });
+      return await r.json();
+    }catch(e){ return null; }
+    finally{ clearTimeout(timer); }
+  }
+
+  /* 官方搜索。相比 tang / meting，它带 interval（时长）和专辑，
+     正好补上跨源匹配最想要的那一维。 */
+  async function qqOfficialSearch(kw, limit){
+    if(!kw || !getQQProxy()) return [];
+    const payload = {
+      comm:{
+        _channelid:'0', _os_version:'6.2.9200-2', ct:'19', cv:'2151',
+        guid:'1F70E520B2EAA7D25E11760783C53CA9', patch:'118',
+        psrf_access_token_expiresAt:0, psrf_qqaccess_token:'', psrf_qqopenid:'',
+        psrf_qqunionid:'', tmeAppID:'qqmusic', tmeLoginType:0, uin:'0',
+        wid:'7223299733393904640'
+      },
+      'music.search.SearchCgiService':{
+        module:'music.search.SearchCgiService',
+        method:'DoSearchForQQMusicDesktop',
+        param:{
+          grp:1, num_per_page:limit || 10, page_num:1, query:kw,
+          remoteplace:'txt.newclient.top', search_type:0, searchid:qqSearchId()
+        }
+      }
+    };
+    let sign;
+    try{ sign = await zzcSign(JSON.stringify(payload)); }catch(e){ return []; }
+    const j = await qqOfficialRequest('musics.fcg?sign=' + sign, payload);
+    if(!j || j.code !== 0) return [];
+    const req = j['music.search.SearchCgiService'] || j.req;
+    if(!req || req.code !== 0) return [];
+    const list = (req.data && req.data.body && req.data.body.song && req.data.body.song.list) || [];
+    return list.map(function(item){
+      return {
+        title:item.title || item.name || '',
+        artist:(item.singer || []).map(function(s){ return s.name || ''; }).join('、'),
+        album:(item.album && item.album.name) || '',
+        sec:item.interval || 0,
+        songmid:item.mid || ''
+      };
+    }).filter(function(x){ return x.title && x.songmid; });
+  }
+
+  /* 判定「跨源的这两条是不是同一首歌」。
+     算法思路取自洛雪音乐 lx-music-desktop 的 musicSdk/index.js findMusic()（Apache-2.0），
+     按本项目的数据结构改写。原来只按「标题 + 歌手」打分，实测容易串歌
+     （原唱 ↔ Live 版、翻唱版互相顶替），这里补上三个维度：
+       1. 时长：两侧都有值时做 ±5 秒容差，超了直接判为不同
+       2. 版本字符：一边带 live / remix / 伴奏 等词、另一边不带，判为不同版本
+       3. 歌手多值：先按 、&;/，| 拆开排序再比，应对顺序差异
+     任一侧缺某个维度（比如网易搜索结果不返回时长）就跳过该维度，不作否决。 */
+
+  const CROSS_VERSION_CHARS = [
+    'instrumental','inst','karaoke','backing track','minus one','minus vocal','no vocal',
+    'off vocal','vocal removed','伴奏','伴唱','卡拉ok','纯音乐','无人声','去人声','消音',
+    'オフボーカル','インスト','반주','노래방',
+    'live','concert','tour','festival','stage','session','现场','演唱会','巡演','音乐会',
+    'ライブ','공연','라이브',
+    'cover','tribute','rendition','remake','翻唱','致敬','改编','カバー','커버',
+    'remix','mix','club','dance','extended','house','edm','dj','dub','trap',
+    '混音','重混','电音','リミックス','리믹스',
+    'acoustic','unplugged','stripped','原声','不插电','アコースティック','어쿠스틱',
+    'demo','小样','试听','デモ','데모',
+    'slowed','slowed reverb','sped up','speed up','nightcore','慢速','加速','变速','ナイトコア',
+    'piano','guitar','orchestra','symphony','violin','钢琴','吉他','管弦乐','小提琴',
+    'ピアノ','ギター','피아노','기타'
+  ];
+
+  function crossFilterStr(s){
+    return String(s || '').replace(/\s|'|\.|,|，|&|"|、|\(|\)|（|）|`|~|-|<|>|\||\/|\]|\[|!|！/g, '').toLowerCase();
+  }
+  function crossSortSinger(s){
+    const str = String(s || '');
+    const rxp = /、|&|;|；|\/|,|，|\|/;
+    return rxp.test(str) ? str.split(rxp).sort(function(a, b){ return a.localeCompare(b); }).join('、') : str;
+  }
+  /* 各源时长写法都不一样：酷我给秒数 "299"、Joox 给 "04:59"、vkeys 给 "4分29秒" */
+  function parseIntervalSec(v){
+    if(v == null || v === '') return 0;
+    const s = String(v).trim();
+    if(/^\d+$/.test(s)) return parseInt(s, 10);
+    if(s.indexOf(':') >= 0){
+      const arr = s.split(':');
+      let sec = 0, unit = 1;
+      while(arr.length){ sec += (parseInt(arr.pop(), 10) || 0) * unit; unit *= 60; }
+      return sec;
+    }
+    const cn = s.match(/(?:(\d+)\s*分)?\s*([\d.]+)\s*秒/);
+    if(cn) return (parseInt(cn[1] || 0, 10) * 60) + (parseFloat(cn[2]) || 0);
+    return 0;
+  }
+  function sameVersionChars(a, b){
+    for(const c of CROSS_VERSION_CHARS){
+      if((a.indexOf(c) >= 0) !== (b.indexOf(c) >= 0)) return false;
+    }
+    return true;
+  }
+
+  /* 返回 null = 判为不是同一首；否则带回各维度的比对结果，供 9 级优先级排序 */
+  function crossCompare(cand, target){
+    const fName = crossFilterStr(target.title);
+    const cName = crossFilterStr(cand.title);
+    if(!fName || !cName) return null;
+    const fSinger = crossFilterStr(crossSortSinger(target.artist));
+    const cSinger = crossFilterStr(crossSortSinger(cand.artist));
+    const fAlbum = crossFilterStr(target.album);
+    const cAlbum = crossFilterStr(cand.album);
+    const fSec = parseIntervalSec(target.sec);
+    const cSec = parseIntervalSec(cand.sec);
+
+    const nameEq = cName === fName;
+    if(!nameEq && cName.indexOf(fName) < 0 && fName.indexOf(cName) < 0) return null;
+    if(!sameVersionChars(cName, fName)) return null;
+
+    const singerEq = cSinger === fSinger;
+    if(fSinger && cSinger && !singerEq &&
+       cSinger.indexOf(fSinger) < 0 && fSinger.indexOf(cSinger) < 0) return null;
+
+    const secEq = (fSec && cSec) ? (Math.abs(fSec - cSec) <= 5) : null;
+    if(secEq === false) return null;
+
+    const albumEq = (fAlbum && cAlbum) ? (fAlbum === cAlbum) : null;
+    return {nameEq:nameEq, singerEq:singerEq, albumEq:albumEq, secEq:secEq};
+  }
+
+  /* 洛雪 findMusic 的 9 级优先级：越靠前的组合越可信，取层级最小的一条 */
+  const CROSS_TIERS = [
+    function(m){ return m.singerEq && m.nameEq && m.secEq; },
+    function(m){ return m.nameEq && m.singerEq && m.albumEq; },
+    function(m){ return m.singerEq && m.nameEq; },
+    function(m){ return m.nameEq && m.secEq; },
+    function(m){ return m.singerEq && m.secEq; },
+    function(m){ return m.secEq; },
+    function(m){ return m.nameEq; },
+    function(m){ return m.singerEq; },
+    function(m){ return m.albumEq; }
+  ];
+  function crossTier(m){
+    for(let i = 0; i < CROSS_TIERS.length; i++){
+      if(CROSS_TIERS[i](m) === true) return i;
+    }
+    return CROSS_TIERS.length;
   }
 
   async function crossSearchCandidates(track, source){
@@ -2024,23 +2261,27 @@ kbd{
       if(source === 'netease'){
         const arr = await fetchJSON('https://api.qijieya.cn/meting/?type=search&id=' +
           encodeURIComponent(kw) + '&limit=5&server=netease', 8000);
+        // 网易 meting 的搜索结果只有 name / artist / url，没有专辑也没有时长，
+        // 这两维留空，crossCompare 会自动跳过、只按名称判定
         (Array.isArray(arr) ? arr : []).slice(0, 5).forEach(function(it){
           const id = (String(it.url || '').match(/[?&]id=(\d+)/) || [])[1];
-          if(id) out.push({title:it.name, artist:it.artist, songid:id, n:1});
+          if(id) out.push({title:it.name, artist:it.artist, album:'', sec:0, songid:id, n:1});
         });
       }else if(source === 'kuwo'){
         const j = await fetchJSON('https://oiapi.net/api/Kuwo?msg=' +
           encodeURIComponent(kw) + '&page=1&limit=5', 8000);
         (Array.isArray(j && j.data) ? j.data : []).slice(0, 5).forEach(function(it, i){
           if(it.rid == null) return;
-          out.push({title:it.song, artist:it.singer, songid:String(it.rid), n:i + 1});
+          out.push({title:it.song, artist:it.singer, album:it.album || '',
+            sec:parseIntervalSec(it.time), songid:String(it.rid), n:i + 1});
         });
       }else if(source === 'joox'){
         const j = await fetchJSON('https://apicx.asia/api/joox_music?msg=' + encodeURIComponent(kw) +
           '&token=' + encodeURIComponent(JOOX_TOKEN) + '&br=' + encodeURIComponent(JOOX_BR), 8000);
         const songs = (j && j.code === 200 && j.data && Array.isArray(j.data.songs)) ? j.data.songs : [];
         songs.slice(0, 5).forEach(function(it, i){
-          out.push({title:it['歌曲名称'], artist:it['歌手'], n:i + 1});
+          out.push({title:it['歌曲名称'], artist:it['歌手'], album:it['专辑'] || '',
+            sec:parseIntervalSec(it['时长']), n:i + 1});
         });
       }
     }catch(e){ return out; }
@@ -2054,15 +2295,20 @@ kbd{
     // 已经有能用、且不是试听片段的直链时不打扰
     if(track.audioUrl && !track.isPreview) return false;
 
+    const target = {title:track.title, artist:track.artist, album:track.album, sec:track.durationSec};
+
     for(const src of CROSS_SOURCES){
       const list = await crossSearchCandidates(track, src.key);
       if(!list.length) continue;
-      const ranked = list.map(function(c){ return {c:c, s:crossScore(c, track)}; })
-        .filter(function(x){ return x.s > 0; })
-        .sort(function(a, b){ return b.s - a.s; });
-      // 只挑相似度最高的少数几条试，避免拼错一首歌还反复请求
-      for(const item of ranked.slice(0, 3)){
-        if(item.s < 4) break;   // 标题没完全对上（s<2×标题满分），宁可不换，避免串歌
+      const scored = [];
+      list.forEach(function(c){
+        const m = crossCompare(c, target);
+        if(m) scored.push({c:c, tier:crossTier(m)});
+      });
+      if(!scored.length) continue;
+      scored.sort(function(a, b){ return a.tier - b.tier; });
+      // 只试最优的两条，避免匹配错一首歌还反复发请求
+      for(const item of scored.slice(0, 2)){
         const probe = {
           uid:'__cross__' + Math.random().toString(36).slice(2),
           source:src.key, keyword:((track.title || '') + ' ' + (normArtist(track.artist) || '')).trim(),
@@ -3260,6 +3506,28 @@ kbd{
     });
     $('exportBtn').addEventListener('click', exportData);
     $('exportBtnFav').addEventListener('click', exportData);
+
+    /* QQ 官方音源代理：留空即完全不启用官方接口，走原来的第三方链路 */
+    const proxyInput = $('qqProxyInput');
+    const proxyHint = $('qqProxyHint');
+    if(proxyInput){
+      proxyInput.placeholder = t('qqProxyPlaceholder');
+      proxyInput.value = getQQProxy();
+      proxyHint.textContent = getQQProxy() ? t('qqProxySaved') : '';
+      $('qqProxySave').addEventListener('click', function(){
+        const v = proxyInput.value.trim();
+        if(v && !/^https?:\/\//i.test(v)){ showToast(t('qqProxyInvalid')); return; }
+        setQQProxy(v);
+        proxyHint.textContent = v ? t('qqProxySaved') : t('qqProxyCleared');
+        showToast(v ? t('qqProxySaved') : t('qqProxyCleared'));
+      });
+      $('qqProxyClear').addEventListener('click', function(){
+        setQQProxy('');
+        proxyInput.value = '';
+        proxyHint.textContent = t('qqProxyCleared');
+        showToast(t('qqProxyCleared'));
+      });
+    }
 
     dom.playBtn.addEventListener('click', togglePlayPause);
     dom.prevBtn.addEventListener('click', function(){ playNext('prev'); });
